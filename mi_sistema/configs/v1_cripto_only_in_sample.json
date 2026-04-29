@@ -1,0 +1,19 @@
+{
+  "source": "auto",
+  "codes": [
+    "BTC-USDT",
+    "ETH-USDT",
+    "SOL-USDT",
+    "XRP-USDT",
+    "ADA-USDT"
+  ],
+  "start_date": "2018-01-01",
+  "end_date": "2022-12-31",
+  "interval": "1D",
+  "initial_cash": 1000,
+  "commission": 0.001,
+  "extra_fields": null,
+  "optimizer": null,
+  "engine": "daily",
+  "validation": null
+}

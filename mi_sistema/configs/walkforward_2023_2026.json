@@ -1,0 +1,29 @@
+{
+  "source": "auto",
+  "codes": [
+    "BTC-USDT",
+    "ETH-USDT",
+    "SOL-USDT",
+    "XRP-USDT",
+    "ADA-USDT",
+    "AAPL.US",
+    "MSFT.US",
+    "GOOGL.US",
+    "NVDA.US",
+    "META.US",
+    "JPM.US",
+    "V.US",
+    "JNJ.US",
+    "UNH.US",
+    "PG.US"
+  ],
+  "start_date": "2023-01-01",
+  "end_date": "2026-04-29",
+  "interval": "1D",
+  "initial_cash": 1000,
+  "commission": 0.001,
+  "extra_fields": null,
+  "optimizer": null,
+  "engine": "daily",
+  "validation": null
+}

@@ -70,7 +70,7 @@ FALLBACK_CHAINS: dict[str, list[str]] = {
     "a_share":   ["tushare", "akshare"],
     "us_equity": ["yfinance", "akshare"],
     "hk_equity": ["yfinance", "futu", "akshare"],
-    "crypto":    ["okx", "ccxt"],
+    "crypto":    ["ccxt", "okx"],
     "futures":   ["tushare", "akshare"],
     "fund":      ["tushare", "akshare"],
     "macro":     ["akshare", "tushare"],

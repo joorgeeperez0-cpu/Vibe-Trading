@@ -1,0 +1,21 @@
+{
+  "source": "auto",
+  "codes": [
+    "AAPL.US", "MSFT.US", "NVDA.US", "AMZN.US", "GOOGL.US",
+    "META.US", "TSLA.US", "AVGO.US", "COST.US", "NFLX.US",
+    "ADBE.US", "PEP.US", "CSCO.US", "AMD.US", "CMCSA.US",
+    "TXN.US", "INTC.US", "QCOM.US", "INTU.US", "ORCL.US",
+    "AMGN.US", "AMAT.US", "ISRG.US", "BKNG.US", "HON.US",
+    "ADP.US", "GILD.US", "SBUX.US", "MDLZ.US", "REGN.US",
+    "SPY.US"
+  ],
+  "start_date": "2018-01-01",
+  "end_date": "2022-12-31",
+  "interval": "1D",
+  "initial_cash": 1000,
+  "commission": 0.001,
+  "extra_fields": null,
+  "optimizer": null,
+  "engine": "daily",
+  "validation": null
+}

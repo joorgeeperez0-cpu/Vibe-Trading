@@ -112,9 +112,22 @@ Import-Csv mi_sistema\results\v15_cripto_top7_walkforward\artifacts\trades.csv |
 
 **2. v2 acciones (en paralelo)**: cross-sectional momentum top 3 con filtro de régimen sobre SPY. Si pasa criterios, se opera junto a v1.5 con asignación de capital descorrelacionada.
 
+## Test de sensibilidad SMA (validación 2026-04-30)
+
+Sweep con SMA = 100, 150, 200, 250 sobre el universo de v1.5. Para verificar que el sistema es robusto al valor exacto del filtro o si hubo curve fitting.
+
+| SMA | Sharpe IS | Sharpe WF | Degradación IS→WF |
+|---|---|---|---|
+| 100 | 1.65 | 1.18 | -28.5 % |
+| 150 | 1.75 | 1.35 | -22.9 % |
+| **200** | **1.72** | **1.71** | **-0.6 %** |
+| 250 | 1.55 | 1.32 | -14.8 % |
+
+**Conclusión**: SMA(200) tiene la menor degradación en walk-forward (-0.6 %), señal de un parámetro robusto. Las demás versiones se desploman 15-28 % al pasar a out-of-sample, indicando sobreajuste al periodo de entrenamiento. SMA(200) **se mantiene como elección validada**, no por suerte sino por demostrada estabilidad.
+
 ## Notas de la plataforma
 
-**Parche permanente del loader cripto**: el archivo `runner.py` y `registry.py` se modifican en runtime con `parche_loader.ps1`. Los cambios se mantienen mientras el contenedor exista. Si haces `docker compose down`, hay que volver a aplicar el parche tras `up`.
+**Parche del loader cripto (PERSISTENTE desde 2026-04-30)**: los archivos `agent/backtest/runner.py` y `agent/backtest/loaders/registry.py` están modificados en el repo (cambio cripto OKX → CCXT). El parche se aplica al construir la imagen Docker (`docker compose build`). Cualquier `docker compose down + up` mantiene el patch automáticamente. **Ya no es necesario ejecutar `parche_loader.ps1` manualmente** salvo que reinicies todo el setup desde cero o pulles cambios upstream que sobrescriban estos archivos.
 
 **Bypass del agente**: los scripts `run_backtest.ps1` van directos al motor de backtest, no usan el agente DeepSeek. Esto da resultados deterministas y rápidos. El agente del Vibe-Trading sigue disponible para análisis exploratorios via web UI cuando haga falta.
 

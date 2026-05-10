@@ -143,7 +143,7 @@ _MARKET_TO_SOURCE = {
     "a_share": "tushare",
     "us_equity": "yfinance",
     "hk_equity": "yfinance",
-    "crypto": "okx",
+    "crypto": "ccxt",
     "futures": "tushare",
     "fund": "tushare",
     "macro": "akshare",

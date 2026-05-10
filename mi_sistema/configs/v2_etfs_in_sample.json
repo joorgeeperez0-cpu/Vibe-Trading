@@ -1,0 +1,21 @@
+{
+  "source": "auto",
+  "codes": [
+    "SPY.US",
+    "QQQ.US",
+    "IWM.US",
+    "EFA.US",
+    "EEM.US",
+    "GLD.US",
+    "TLT.US"
+  ],
+  "start_date": "2018-01-01",
+  "end_date": "2022-12-31",
+  "interval": "1D",
+  "initial_cash": 1000,
+  "commission": 0.001,
+  "extra_fields": null,
+  "optimizer": null,
+  "engine": "daily",
+  "validation": null
+}

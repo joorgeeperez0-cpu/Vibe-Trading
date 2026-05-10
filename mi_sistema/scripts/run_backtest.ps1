@@ -1,11 +1,14 @@
 # Lanza un backtest usando un config concreto.
-# Uso:
+# Uso basico (signal engine por defecto = signal_engine_v1.py):
 #   powershell -ExecutionPolicy Bypass -File mi_sistema\scripts\run_backtest.ps1 -ConfigName "in_sample_2018_2022"
-#   powershell -ExecutionPolicy Bypass -File mi_sistema\scripts\run_backtest.ps1 -ConfigName "walkforward_2023_2026"
+# Uso con signal engine alternativo (test de sensibilidad):
+#   powershell -ExecutionPolicy Bypass -File mi_sistema\scripts\run_backtest.ps1 -ConfigName "v15_cripto_top7_in_sample" -SignalEngine "signal_engine_v15_sma150"
 
 param(
     [Parameter(Mandatory=$true)]
-    [string]$ConfigName
+    [string]$ConfigName,
+    [Parameter(Mandatory=$false)]
+    [string]$SignalEngine = "signal_engine_v1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,8 +18,18 @@ $miSistemaDir = Split-Path -Parent $scriptDir
 $repoRoot = Split-Path -Parent $miSistemaDir
 
 $configFile = Join-Path $miSistemaDir "configs\$ConfigName.json"
-$signalEngineFile = Join-Path $miSistemaDir "signal_engine_v1.py"
-$resultsDir = Join-Path $miSistemaDir "results\$ConfigName"
+$signalEngineFile = Join-Path $miSistemaDir "$SignalEngine.py"
+
+# El nombre del run y carpeta de resultados incluye el signal engine si no es el default
+$resultsSubdir = if ($SignalEngine -eq "signal_engine_v1") { $ConfigName } else { "$ConfigName" + "__" + $SignalEngine }
+$resultsDir = Join-Path $miSistemaDir "results\$resultsSubdir"
+
+if (-not (Test-Path $signalEngineFile)) {
+    Write-Host "ERROR: no encuentro el signal engine $signalEngineFile" -ForegroundColor Red
+    Write-Host "Signal engines disponibles en mi_sistema\:" -ForegroundColor Yellow
+    Get-ChildItem $miSistemaDir -Filter "signal_engine*.py" | ForEach-Object { Write-Host "  $($_.BaseName)" }
+    exit 1
+}
 
 if (-not (Test-Path $configFile)) {
     Write-Host "ERROR: no encuentro el config $configFile" -ForegroundColor Red
@@ -25,14 +38,15 @@ if (-not (Test-Path $configFile)) {
     exit 1
 }
 
-$runId = "manual_$ConfigName"
+$runId = "manual_$resultsSubdir"
 $runDirInContainer = "/app/agent/runs/$runId"
 
 Set-Location $repoRoot
 
 Write-Host ""
-Write-Host "Config: $ConfigName" -ForegroundColor Cyan
-Write-Host "Run ID: $runId" -ForegroundColor Cyan
+Write-Host "Config:        $ConfigName" -ForegroundColor Cyan
+Write-Host "Signal engine: $SignalEngine" -ForegroundColor Cyan
+Write-Host "Run ID:        $runId" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "[1/7] Verificando contenedor..." -ForegroundColor Yellow

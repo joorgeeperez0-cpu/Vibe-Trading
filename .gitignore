@@ -9,7 +9,6 @@ agent/.env
 
 .claude/*
 !.claude/hooks.json
-CLAUDE.md
 .vscode/
 learn-claude-code-main/
 agent/sessions/
@@ -56,3 +55,6 @@ NOTES.md
 
 # Agent tool aliases (auto-generated mirror of CLAUDE.md)
 AGENTS.md
+
+# Log volatil de la tarea programada de Windows (cada ejecucion lo reescribe)
+mi_sistema/scripts/schedule_log.txt

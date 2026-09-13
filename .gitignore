@@ -56,5 +56,7 @@ NOTES.md
 # Agent tool aliases (auto-generated mirror of CLAUDE.md)
 AGENTS.md
 
-# Log volatil de la tarea programada de Windows (cada ejecucion lo reescribe)
+# Logs volatiles de las tareas programadas
 mi_sistema/scripts/schedule_log.txt
+mi_sistema/scripts/schedule_log_v2.txt
+mi_sistema/scripts/data_quality_log.txt

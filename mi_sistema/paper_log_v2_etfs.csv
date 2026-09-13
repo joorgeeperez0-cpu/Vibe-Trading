@@ -1,2 +1,4 @@
 fecha,spy_regimen,mom_qqq,mom_iwm,mom_efa,mom_eem,mom_gld,mom_tlt,pos1,pos2,pos3,accion,notas
 2026-05-05,ON,7.48,13.49,6.34,15.64,12.04,-6.18,EEM,IWM,GLD,apertura_inicial,Apertura inicial v2 ETFs
+2026-07-31,ON,7.95,11.12,5.18,4.67,-23.74,-5.48,IWM,QQQ,EFA,rebalance,ejecutado por script
+2026-08-31,ON,17.97,13.14,2.22,7.29,-15.47,-8.74,QQQ,IWM,EEM,rebalance,ejecutado por script

@@ -14,12 +14,17 @@ Proyecto en stand-by (modo B, paper sin capital real) desde 2026-05-28. Binance 
 - Validación contra FMP: divergencia máxima yfinance vs FMP en las velas de señal 0.77 % (ADA, en high/low). Ninguna > 1 %.
 - Fase 3: estado persistente en `mi_sistema/positions_state.json`, validación cruzada semanal yfinance vs FMP (domingos, `data_quality_check.py`, requiere `FMP_API_KEY`).
 
-**Track record reconstruido v1.5 (2026-05-01 → 2026-09-12)**:
-- Sin señales hasta el 2026-08-19 (mercado bajo SMA 200 / sin breakout).
-- 10 trades: 9 cerrados + BTC abierto (entrada 2026-08-21 a 78 335, stop 75 958).
-- Con precios de entrada FMP y precios de stop registrados: 4 ganadores / 9 cerrados (44 %). 8 de las 9 salidas son stops subidos con el close del mismo día en que se tocaron (precio de stop > close del día) (ver DECISIONS_LOG 2026-09-13, punto abierto).
+**Motor sustituido el mismo día**: tras backtestear el fix del trailing stop "mismo día" (WF Sharpe 1.75, Calmar 2.77, MDD 8.2 %, PF 3.38; 4/4 gates), el usuario aprobó pasar a **v1_stopfix**. `signal_engine_v1.py` y `v15_donchian.pine` quedan deprecados. `check_v15_cripto.py` migrado y `paper_log.csv` reconstruido otra vez con la lógica nueva.
 
-**Decisiones abiertas**: comportamiento del trailing stop en la misma vela (Python y Pine lo hacen igual; afecta al backtest validado). Ver DECISIONS_LOG.
+**Track record reconstruido v1.5 stopfix (2026-05-01 → 2026-09-12)**:
+- Sin señales hasta el 2026-08-19 (mercado bajo SMA 200 / sin breakout).
+- 7 trades: 6 cerrados + BTC abierto (entrada 2026-08-19 a 69 266, stop 75 958, +11.5 % no realizado a 09-12).
+- Hit ratio con precios FMP: 3/6 (50 %). Todos los fills de salida dentro del rango de la vela FMP.
+- Versión v1 del log (10 trades, 4/9) conservada en `paper_log_v1_2026-09-13.csv.bak`.
+
+**Pendiente del usuario**: compilar `pine/v15_stopfix.pine` en TradingView y sustituir el script en los 7 gráficos; configurar `FMP_API_KEY` para la validación de los domingos.
+
+**Decisiones abiertas**: ninguna.
 
 ## Resumen ejecutivo
 

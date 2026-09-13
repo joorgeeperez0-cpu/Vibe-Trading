@@ -176,3 +176,80 @@ Lo que maximiza retorno con capital pequeño es **Sharpe ratio**, no frequency.
 **Punto abierto (no se ha cambiado nada, requiere decisión)**: el trailing stop se sube con el **close** de la vela y se compara con el **low** de esa misma vela. Como el low suele ocurrir antes que el close, se producen "salidas" a un precio de stop que puede ser superior al close del día (BTC 2026-08-20: stop 70 094, close 73 033, low 68 868). Pasa en 8 de las 9 salidas reconstruidas. `signal_engine_v1.py` y `pine/v15_donchian.pine` hacen lo mismo, así que el backtest validado (Sharpe WF 1.71) incluye este sesgo. Opción a evaluar: comparar el low contra el stop de la vela anterior y actualizar el trailing después. Si se cambia, sería un motor nuevo (`signal_engine_v15_trailfix.py` + Pine) con backtest IS/WF y gates antes de promocionar.
 
 **Por qué no se tocó**: la convención del proyecto exige versionar por archivo y pasar gates antes de cambiar la lógica en paper.
+
+## 2026-09-13 · Backtest de signal_engine_v1_stopfix (trailing stop sin mismo día)
+
+**Qué se probó**: `mi_sistema/signal_engine_v1_stopfix.py` (+ `pine/v15_stopfix.pine`). Único cambio respecto a v1: en la vela X se evalúa `low_X <= stop` con el stop que quedó al cierre de X-1; solo si no hay salida se sube el trailing con `close_X - 2·ATR_X` para X+1. Parámetros idénticos (55/20/200/20/2.0/1 %).
+
+**Metodología**:
+- Docker no estaba arrancado y CCXT-Binance está bloqueado desde España, así que se creó `mi_sistema/scripts/run_backtest_local.py`: ejecuta el **mismo** `CryptoEngine` de `agent/backtest` (sin modificarlo) sobre los **OHLCV archivados** de `results/v15_cripto_top7_{in_sample,walkforward}`, con las mismas configs `v15_cripto_top7_*.json`.
+- Validación del harness: la reproducción de v1 da métricas idénticas al decimal y `trades.csv`, `equity.csv` y `positions.csv` idénticos línea a línea (IS y WF).
+- WF = ejecución separada 2023-01-01 → 2026-04-29, sin reoptimización (igual que el WF original).
+
+**Números crudos** (`results/v1_stopfix/comparison.md`):
+
+| Métrica | v1 IS | v1 WF | stopfix IS | stopfix WF |
+|---|---|---|---|---|
+| Sharpe | 1.7246 | 1.7111 | 1.6588 | 1.7450 |
+| Calmar | 2.5106 | 2.2623 | 2.4906 | 2.7740 |
+| Max DD | 7.19 % | 7.80 % | 10.23 % | 8.23 % |
+| Profit factor | 3.1607 | 2.6620 | 5.0130 | 3.3790 |
+| Trades | 120 | 92 | 95 | 74 |
+| Retorno anual | 18.05 % | 17.65 % | 25.48 % | 22.83 % |
+| Win rate | 57.5 % | 55.4 % | 61.1 % | 52.7 % |
+| Ganancia/pérdida media | 2.34 | 2.14 | 3.20 | 3.03 |
+| Días medios en posición | 7.8 | 7.1 | 10.8 | 9.9 |
+
+WF año a año (retorno / Sharpe): 2023 v1 35.1 % / 3.00 vs sf 35.8 % / 2.67 · 2024 v1 20.6 % / 1.52 vs sf 41.9 % / 2.13 · 2025 v1 6.9 % / 0.99 vs sf 4.2 % / 0.56 · 2026 (hasta 29-abr) idénticos, −1.3 %.
+
+**Gates**: stopfix pasa 4/4 en IS y en WF. En WF es ≥ v1 en Sharpe, Calmar y PF; peor en MDD (+0.43 pp). Regla automática → **candidato a sustitución**.
+
+**Interpretación (diagnóstico `results/v1_stopfix/v1_exit_types_*.csv`)**: de las salidas de v1, 40/120 (IS) y 30/92 (WF) son "stop fantasma" (solo saltan porque el stop se subió con el close del mismo día). El 100 % de ellas fueron ganadoras (+26.6 % IS, +21.1 % WF de media) y ocurrieron en días alcistas. En el backtest el engine ejecuta en la apertura siguiente, así que v1 no tenía lookahead de precio: el sesgo **no inflaba** el Sharpe 1.71. Lo que hacía la regla era cerrar tendencias ganadoras en días de mucho rango intradía (una toma de beneficios involuntaria). stopfix las mantiene: más retorno y PF, algo más de drawdown, Sharpe equivalente. El Sharpe 1.71 original sigue siendo creíble como medida de la estrategia; la regla del stop era distinta a la documentada, no fraudulenta.
+
+**Limitaciones pendientes**:
+1. Ningún motor modela el fill intradía del stop: el engine vende en la apertura del día siguiente. Afecta a ambos por igual, pero los números absolutos de las salidas por stop real no son exactos.
+2. El engine ignora `commission: 0.001` de la config: aplica 0.05 % taker (apertura), 0.02 % maker (cierre), 0.05 % slippage y funding de perpetuo 0.01 %/8 h sobre longs. STRATEGY_V1.md documenta 0.10 % + 0.05 %. Igual para v1 y stopfix.
+3. 2025 fue peor con stopfix (Sharpe 0.56 vs 0.99): la mejora se concentra en 2024.
+4. `pine/v15_stopfix.pine` no se ha compilado en TradingView.
+
+**Impacto en el paper 2026 (datos yfinance)**: stopfix habría registrado 7 trades en lugar de 10. BTC seguiría en posición desde 2026-08-19 (sin la salida del 08-20 y reentrada del 08-21), BNB sin el ciclo 08-19→08-20→08-21, ETH saldría el 08-23 (v1: 08-21) y SOL tendría un único trade 08-19→08-30.
+
+**Decisión**: pendiente del usuario. v1 sigue siendo el motor operativo; no se ha tocado `signal_engine_v1.py`, `v15_donchian.pine`, `check_v15_cripto.py` ni configs.
+
+## 2026-09-13 · Sustitución de v1 por v1_stopfix en operativa (aprobada por el usuario)
+
+**Decidido**: el motor operativo de v1.5 cripto pasa a ser `signal_engine_v1_stopfix.py` / `pine/v15_stopfix.pine`. `signal_engine_v1.py` y `pine/v15_donchian.pine` quedan **deprecados** (docstring de aviso, sin cambios de lógica, se conservan por trazabilidad: reproducen los resultados archivados).
+
+**Números que lo justifican** (backtest del mismo día, mismos OHLCV y engine):
+
+| WF 2023-2026 | v1 | v1_stopfix |
+|---|---|---|
+| Sharpe | 1.71 | 1.75 |
+| Calmar | 2.26 | 2.77 |
+| Max DD | 7.8 % | 8.2 % |
+| Profit factor | 2.66 | 3.38 |
+| Trades | 92 | 74 |
+| Retorno anual | 17.7 % | 22.8 % |
+
+IS 2018-2022 stopfix: Sharpe 1.66, Calmar 2.49, MDD 10.2 %, PF 5.01. Pasa 4/4 gates en IS y WF. En rentabilidad ajustada por riesgo son equivalentes; el motivo de fondo es de **corrección**: stopfix implementa la regla escrita en STRATEGY_V1.md, es ejecutable con una orden stop real y elimina las salidas "fantasma" que el paper registraba a precios inalcanzables.
+
+**Migración ejecutada**:
+1. `check_v15_cripto.py`: en `_simulate` las salidas se evalúan con el stop del cierre anterior y el trailing se actualiza solo si no hay salida. Precio de salida por stop registrado como `min(stop, open)`. Se mantiene toda la infraestructura (fecha real de vela, descarte de vela UTC en curso, deduplicación, backfill, `positions_state.json`, validación FMP de los domingos). Backup: `check_v15_cripto.py.pre_stopfix.bak`.
+2. Tests antes de tocar el log real: señales de `check_v15_cripto.py` idénticas a `signal_engine_v1_stopfix.py` día a día; reanudar desde estado == simular desde 2026-05-01; rebuild en seco correcto.
+3. `paper_log.csv` reconstruido con `--rebuild-state`: 135 filas (2026-05-01 → 2026-09-12), sin duplicados ni huecos. Log de v1 en `paper_log_v1_2026-09-13.csv.bak`.
+
+**Resultado del paper reconstruido** — 7 trades (6 cerrados + BTC abierto), igual que lo previsto en el reporte del backtest:
+
+| Ticker | Entrada | Salida | Fill salida | Ret. (entrada FMP) |
+|---|---|---|---|---|
+| ETH | 2026-08-19 | 2026-08-23 stop | 2372.13 | +5.35 % |
+| SOL | 2026-08-19 | 2026-08-30 stop | 100.86 | +18.18 % |
+| XRP | 2026-08-21 | 2026-08-26 stop | 1.3959 | −4.00 % |
+| ADA | 2026-08-21 | 2026-08-25 stop | 0.2079 | −9.23 % |
+| BNB | 2026-08-19 | 2026-09-01 stop | 675.71 | +7.70 % |
+| BNB | 2026-09-05 | 2026-09-10 stop | 718.26 | −6.33 % |
+| BTC | 2026-08-19 | abierta (stop 75 958) | — | +11.49 % no realizado a 09-12 |
+
+Hit ratio con precios FMP: 3/6 = 50 %. Todos los fills de salida caen dentro del rango low–high de la vela FMP (con v1, 8 de 9 salidas quedaban por encima del close). Divergencia máxima yfinance vs FMP: 0.77 % (ADA).
+
+**Pendiente del usuario**: compilar `pine/v15_stopfix.pine` en TradingView y sustituir el script en los 7 gráficos (nota en `paper_trading_guia.md`).

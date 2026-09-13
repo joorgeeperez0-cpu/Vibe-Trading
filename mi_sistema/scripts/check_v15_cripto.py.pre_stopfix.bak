@@ -21,18 +21,8 @@ FASE 3 (2026-09-13):
   datos historicos no puede reescribir retroactivamente senales ya emitidas.
 - Validacion cruzada yfinance vs FMP los domingos (data_quality_check.py).
 
-MIGRACION A STOPFIX (2026-09-13, aprobada por el usuario):
-- Antes (v1): el trailing se subia con close_X y despues se comparaba low_X con
-  ese stop ya subido -> salidas "fantasma" a precios de stop inalcanzables.
-- Ahora (stopfix): en la vela X se evalua low_X contra el stop vigente desde el
-  cierre de X-1; solo si no hay salida se sube el trailing con close_X - 2*ATR_X,
-  que aplica desde X+1. Precio de salida por stop = min(stop, open_X) (gap).
-- Version anterior en check_v15_cripto.py.pre_stopfix.bak. Log reconstruido
-  con esta logica; el de v1 queda en mi_sistema/paper_log_v1_2026-09-13.csv.bak.
-
-La logica de senal es identica a mi_sistema/signal_engine_v1_stopfix.py y a
-mi_sistema/pine/v15_stopfix.pine. No cambiar aqui sin replicar alli.
-(signal_engine_v1.py y pine/v15_donchian.pine estan DEPRECADOS.)
+La logica de senal es identica a mi_sistema/signal_engine_v1.py y a
+mi_sistema/pine/v15_donchian.pine. No cambiar aqui sin replicar alli.
 
 Uso:
     python mi_sistema/scripts/check_v15_cripto.py
@@ -261,7 +251,6 @@ def _simulate(df: pd.DataFrame, ticker: str, start_date: pd.Timestamp, init: dic
     weight = init["weight"]
 
     df_sim = df[df.index >= start_date]
-    opens = df_sim["open"].values
     closes = df_sim["close"].values
     lows = df_sim["low"].values
     sma_v = df_sim["sma"].values
@@ -291,15 +280,19 @@ def _simulate(df: pd.DataFrame, ticker: str, start_date: pd.Timestamp, init: dic
                 in_position = True
                 signal = f"ENTRADA a ${entry_price:.4f} stop ${stop_price:.4f} peso {weight * 100:.1f}%"
         else:
-            # STOPFIX 1) Salidas con el stop vigente desde el cierre anterior.
+            # Trailing stop ATR
+            if not np.isnan(atr_v[i]) and atr_v[i] > 0:
+                new_stop = float(closes[i]) - ATR_MULT_CRYPTO * float(atr_v[i])
+                if new_stop > stop_price:
+                    stop_price = new_stop
+
             exit_signal = None
+            # Salida por stop
             if lows[i] <= stop_price:
-                # Si la vela abre por debajo del stop (gap), la orden se ejecuta a la apertura.
-                fill = min(stop_price, float(opens[i]))
-                exit_signal = f"SALIDA por stop a ${fill:.4f}"
+                exit_signal = f"SALIDA por stop a ${stop_price:.4f}"
+            # Salida por Donchian bajo
             elif not np.isnan(dlow_v[i]) and closes[i] < dlow_v[i]:
                 exit_signal = f"SALIDA por Donchian a ${closes[i]:.4f}"
-
             if exit_signal:
                 signal = exit_signal
                 in_position = False
@@ -307,11 +300,6 @@ def _simulate(df: pd.DataFrame, ticker: str, start_date: pd.Timestamp, init: dic
                 entry_date = None
                 stop_price = None
                 weight = 0.0
-            elif not np.isnan(atr_v[i]) and atr_v[i] > 0:
-                # STOPFIX 2) Sin salida: trailing al cierre, aplica desde la vela siguiente.
-                new_stop = float(closes[i]) - ATR_MULT_CRYPTO * float(atr_v[i])
-                if new_stop > stop_price:
-                    stop_price = new_stop
 
         by_date[dates[i]] = {
             "status": "EN_POSICION" if in_position else "FUERA",

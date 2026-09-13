@@ -64,11 +64,13 @@ Vibe-Trading/
 Los archivos `signal_engine_*.py` son **clases que implementan el contrato `SignalEngine`**, NO scripts ejecutables. No tienen `__main__` y lanzarlos con `python <archivo>.py` no produce señal. Para generar señales se usan los scripts en `mi_sistema/scripts/`.
 
 Estado de cada variante:
-- `signal_engine_v1.py` (SMA=200) → **VALIDADO Y OPERATIVO** para v1.5 cripto. Sharpe walk-forward 1.71.
+- `signal_engine_v1_stopfix.py` (SMA=200, trailing stop evaluado con el stop del cierre anterior) → **VALIDADO Y OPERATIVO** para v1.5 cripto desde 2026-09-13. Walk-forward Sharpe 1.75, Calmar 2.77, MDD 8.2 %, PF 3.38. Pine: `pine/v15_stopfix.pine`. `check_v15_cripto.py` implementa esta lógica.
+- `signal_engine_v1.py` (SMA=200) → **DEPRECADO** 2026-09-13 (trailing stop evaluado en la misma vela). Sharpe walk-forward 1.71. Se conserva por trazabilidad junto a `pine/v15_donchian.pine`; no usar en operativa.
 - `signal_engine_v2_acciones.py` (cross-sectional momentum 6m, top 3) → **VALIDADO Y OPERATIVO** para v2 ETFs (universo SPY/QQQ/IWM/EFA/EEM/GLD/TLT). Sharpe walk-forward 1.10. Pese al nombre histórico "acciones", el motor se usa con ETFs.
 - `signal_engine_v15_sma{100,150,250}.py` → variantes del sweep SMA, **descartadas**. SMA(200) ganó por estabilidad IS→WF.
 - `signal_engine_v2b_acciones.py` → variante 12m skip-1 momentum, **descartada**. Peor que v2 base.
 - `signal_engine_v3_4h.py` → Donchian breakout intradía 4h, **descartado por datos**. Walk-forward Sharpe 0.55, MDD 23.6 %, comisiones se comen el edge.
+- `signal_engine_v1_stopfix.py` (+ `pine/v15_stopfix.pine`) → v1.5 con trailing stop evaluado con el stop del cierre anterior. **CANDIDATO A SUSTITUCIÓN, pendiente de decisión** (2026-09-13). WF Sharpe 1.75, Calmar 2.77, MDD 8.2 %, PF 3.38. Resultados en `mi_sistema/results/v1_stopfix/`.
 
 ## Comandos típicos
 ```powershell
@@ -134,8 +136,17 @@ docker compose --profile frontend up -d
 - **Validación cruzada semanal**: los domingos `check_v15_cripto.py` llama a `mi_sistema/scripts/data_quality_check.py` (cierre yfinance vs FMP de BTC, ETH, SPY; umbral 0.5 %). Escribe en `mi_sistema/scripts/data_quality_log.txt`. Requiere la variable de entorno `FMP_API_KEY` (no commitear); sin ella registra SKIP. Forzar: `python mi_sistema/scripts/check_v15_cripto.py --data-check`.
 - `positions_state.json` es parte del track record: no editarlo a mano. Si se borra, la siguiente ejecución re-simula desde 2026-05-01.
 
-### Abierto · Trailing stop evaluado en la misma vela (NO corregido, pendiente de decisión)
-El stop se sube con el `close` de la vela y luego se compara con el `low` de esa misma vela. Resultado: salidas a precio de stop superior al close del día (8 de 9 salidas del paper). Afecta igual a `signal_engine_v1.py`, `pine/v15_donchian.pine` y al backtest validado. Cualquier corrección debe ir como motor nuevo versionado + backtest IS/WF + gates. Ver `mi_sistema/docs/DECISIONS_LOG.md` (2026-09-13).
+### CERRADO 2026-09-13 · Trailing stop evaluado en la misma vela → sustituido por v1_stopfix
+v1 subía el stop con el `close` de la vela y luego lo comparaba con el `low` de esa misma vela: salidas a precio de stop superior al close del día (8 de 9 salidas del paper de v1).
+
+- **Motor operativo ahora**: `mi_sistema/signal_engine_v1_stopfix.py` + `mi_sistema/pine/v15_stopfix.pine` (salidas con el stop del cierre anterior; trailing actualizado al cierre solo si no hay salida). `check_v15_cripto.py` migrado a esa lógica (backup `check_v15_cripto.py.pre_stopfix.bak`), con test de paridad día a día contra el motor.
+- **Deprecados** (se conservan, sin cambios de lógica): `signal_engine_v1.py`, `pine/v15_donchian.pine`.
+- **Backtest que lo justificó** (mismos OHLCV archivados y engine, harness `mi_sistema/scripts/run_backtest_local.py` validado reproduciendo v1 al decimal): WF Sharpe 1.75 (v1 1.71), Calmar 2.77 (2.26), MDD 8.2 % (7.8 %), PF 3.38 (2.66), 74 trades (92). 4/4 gates en IS y WF. Resultados en `mi_sistema/results/v1_stopfix/`.
+- **Sobre el Sharpe 1.71 de v1**: el engine ejecuta en la apertura siguiente, así que el sesgo no lo inflaba; las 30 "salidas fantasma" WF de v1 fueron todas ganadoras (cerraban tendencias en días de mucho rango).
+- **paper_log.csv reconstruido con stopfix**: 135 filas, 7 trades (6 cerrados + BTC abierto), hit ratio FMP 3/6. Todos los fills dentro del rango de la vela. Log de v1 en `mi_sistema/paper_log_v1_2026-09-13.csv.bak`.
+- **Pendiente del usuario**: compilar `v15_stopfix.pine` en TradingView y sustituirlo en los 7 gráficos (ver `mi_sistema/paper_trading_guia.md`).
+- **Limitaciones conocidas** del engine de backtest (afectan a cualquier motor): no simula el fill intradía del stop (vende en la apertura siguiente) e ignora `commission` de la config (usa 0.05 % taker / 0.02 % maker / 0.05 % slippage / funding 0.01 %/8 h).
+- Detalle: `mi_sistema/docs/DECISIONS_LOG.md` (entradas 2026-09-13).
 
 ## Documentación a consultar
 - `estrategia_v1.md` (raíz) — diseño original de la estrategia v1 (histórico, ya superado por STRATEGY_V1.md).

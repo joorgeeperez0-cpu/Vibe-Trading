@@ -34,6 +34,16 @@ Universo cerrado durante toda la fase de validación. Sin sustituciones salvo p�
 
 **Trailing tipo Turtle**: el stop solo se mueve a favor de la posición, nunca se relaja.
 
+**Orden de evaluación del stop (implementación vigente: v1_stopfix, desde 2026-09-13)**:
+1. Durante el día X el stop activo es el calculado al cierre de X-1. Si el mínimo del día lo toca, se sale (precio: el stop, o la apertura si abre por debajo).
+2. Si no hay salida, al cierre de X se recalcula `stop = máx(stop, cierre_X − 2.0 × ATR(20)_X)`, que aplica desde X+1.
+
+Implementación: `mi_sistema/signal_engine_v1_stopfix.py`, `mi_sistema/pine/v15_stopfix.pine`, `mi_sistema/scripts/check_v15_cripto.py`.
+
+> **Nota histórica · v1 (DEPRECADO 2026-09-13)**: `signal_engine_v1.py` / `pine/v15_donchian.pine` subían el trailing con el cierre del día y lo comparaban con el mínimo **del mismo día**, algo que un stop real no puede hacer. Generaba salidas "fantasma" en días alcistas de mucho rango. Las métricas de v1 se conservan abajo como referencia histórica. Detalle en `DECISIONS_LOG.md` (2026-09-13).
+>
+> Nota de costes: el engine de backtest (`CryptoEngine`) no usa el 0.10 % de la sección "Costes modelados"; aplica 0.05 % taker al abrir, 0.02 % maker al cerrar, 0.05 % de slippage y funding 0.01 %/8 h. Afecta igual a v1 y a stopfix.
+
 ## Reglas de riesgo
 
 - **Riesgo por trade**: 1 % del capital total al momento de la entrada (RISK_PER_TRADE = 0.01).
@@ -48,7 +58,23 @@ Universo cerrado durante toda la fase de validación. Sin sustituciones salvo p�
 - 0.10 % comisión por lado (Binance spot).
 - Slippage estimado en 0.05 % adicional por trade.
 
-## Métricas de validación (cierre 2026-04-30)
+## Métricas de validación vigentes · v1_stopfix (2026-09-13)
+
+Mismos OHLCV archivados, mismo engine y mismas configs que la validación original de v1.
+
+| Métrica | In-sample 2018-2022 | Walk-forward 2023-2026 | Umbral |
+|---|---|---|---|
+| Sharpe ratio | 1.66 | 1.75 | >= 1.0 OK |
+| Calmar ratio | 2.49 | 2.77 | >= 0.5 OK |
+| Max drawdown | 10.2 % | 8.2 % | <= 20 % OK |
+| Profit factor | 5.01 | 3.38 | >= 1.5 OK |
+| Trades | 95 | 74 | >= 50 OK |
+| Annual return | 25.5 % | 22.8 % | (descriptivo) |
+| Win rate | 61.1 % | 52.7 % | (descriptivo) |
+
+Resultados completos: `mi_sistema/results/v1_stopfix/`. El sweep de SMA de abajo se hizo con v1; no se ha repetido con stopfix.
+
+## Métricas de validación históricas · v1 DEPRECADO (cierre 2026-04-30)
 
 | Métrica | In-sample 2018-2022 | Walk-forward 2023-2026 | Umbral |
 |---|---|---|---|

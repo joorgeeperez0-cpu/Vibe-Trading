@@ -2,6 +2,17 @@
 
 Documento operativo para los próximos tres meses de paper trading con la estrategia v1.5 sobre 7 cripto, vía TradingView.
 
+> **⚠ PASO PENDIENTE PARA EL USUARIO (desde 2026-09-13): cambiar el script Pine a `v15_stopfix.pine`.**
+>
+> El motor operativo pasó de v1 a **v1_stopfix** (el stop se evalúa con el nivel del cierre anterior; el trailing se recalcula al cierre y aplica desde la vela siguiente). `check_v15_cripto.py` y `paper_log.csv` ya usan la lógica nueva. Falta TradingView:
+>
+> 1. En el Pine Editor, pega `mi_sistema/pine/v15_stopfix.pine` y guárdalo como "v1.5 stopfix". **Compílalo y revisa que no haya errores** (no se ha compilado nunca en TradingView).
+> 2. Sustituye "v1.5 Donchian" por "v1.5 stopfix" en los 7 gráficos y rehaz la alerta "Entrada Long" apuntando al script nuevo.
+> 3. Comprueba en BTCUSDT que el gráfico coincide con `paper_log.csv`: entrada el 2026-08-19 y **sin** salida el 2026-08-20.
+> 4. `v15_donchian.pine` queda deprecado; donde abajo pone "v1.5 Donchian" / `v15_donchian.pine`, léase el script stopfix.
+>
+> En el panel, la línea roja muestra el stop que rige la vela actual y la fila "Stop mañana" el nivel ya actualizado para la siguiente. Referencias del backtest WF para la validación a 3 meses con stopfix: Sharpe 1.75, win rate 53 %, PF 3.38, MDD 8.2 % (la tabla de abajo conserva los valores históricos de v1).
+
 ## Setup inicial (una sola vez)
 
 **1. Crear lista de activos en TradingView.**

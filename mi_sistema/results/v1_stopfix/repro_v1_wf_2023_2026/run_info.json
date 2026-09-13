@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-09-13 15:08:45",
+  "harness": "mi_sistema/scripts/run_backtest_local.py",
+  "config": "mi_sistema\\configs\\v15_cripto_top7_walkforward.json",
+  "config_sha256": "1e7482fdbfc802f29a233257d5d3c0c37bc563709793883115d28169474cba9e",
+  "signal_engine": "mi_sistema\\signal_engine_v1.py",
+  "signal_engine_sha256": "f75026bfc0e6119a5233d8af61e4f01deae4f39d4927d274f2551f96f61c2368",
+  "ohlcv_source": "mi_sistema\\results\\v15_cripto_top7_walkforward\\artifacts",
+  "engine": "agent/backtest/engines/crypto.py CryptoEngine (sin modificar)",
+  "bars_per_year": 365,
+  "python": "3.14.3",
+  "pandas": "2.3.3"
+}

@@ -1,25 +1,43 @@
 """
-*** DEPRECADO desde 2026-09-13 ***
-Sustituido en operativa por mi_sistema/signal_engine_v1_stopfix.py.
-Motivo: este motor sube el trailing stop con el close de la vela y lo compara
-con el low de ESA MISMA vela, algo que un stop real no puede hacer. stopfix
-evalua el low contra el stop del cierre anterior. Backtest WF 2023-2026 con los
-mismos datos y engine: stopfix Sharpe 1.75 / Calmar 2.77 / MDD 8.2 % / PF 3.38
-frente a v1 1.71 / 2.26 / 7.8 % / 2.66. Ver mi_sistema/docs/DECISIONS_LOG.md.
-Se conserva sin cambios de logica por trazabilidad (reproduce los resultados
-archivados en mi_sistema/results/v15_cripto_top7_*). NO usar en operativa.
-
-Estrategia v1 - Donchian breakout 55/20 con filtro SMA(200).
+Estrategia v1.5 stopfix - Donchian breakout 55/20 con filtro SMA(200).
 Long-only, spot, sin apalancamiento.
 
+Variante de signal_engine_v1.py (2026-09-13). UNICO cambio: el orden de
+evaluacion del trailing stop. Parametros identicos.
+
+Bug de v1 (documentado en CLAUDE.md -> "Bugs conocidos"):
+    En la vela X, v1 primero sube el stop con close_X - 2*ATR_X y despues
+    compara low_X con ESE stop ya subido:
+
+        stop = max(stop, close[i] - k*atr[i])   # usa el close de hoy
+        if low[i] <= stop: salir                # low de hoy vs stop de hoy
+
+    Un stop real puesto en el exchange durante el dia X solo puede estar al
+    nivel calculado al cierre de X-1. El low de X ocurre antes de que exista
+    close_X, asi que v1 genera salidas que un stop real no habria disparado
+    (p.ej. dias alcistas con mucho rango intradia).
+
+Correccion (stopfix):
+    1. Al inicio de la vela X el stop activo es el que quedo al cierre de X-1.
+    2. Si low_X <= stop_activo -> salida. Si no, si close_X < Donchian20 -> salida.
+    3. Solo si NO hay salida, al cierre de X se actualiza el trailing:
+       stop_activo = max(stop_activo, close_X - k*ATR_X). Aplica desde X+1.
+
+        if low[i] <= stop: salir                # stop del dia anterior
+        elif close[i] < donch_low[i]: salir
+        else: stop = max(stop, close[i] - k*atr[i])   # para manana
+
 Sigue el contrato SignalEngine de Vibe-Trading: returns Dict[code, Series]
-con valores en [0.0, 1.0] (peso de la posicion).
+con valores en [0.0, 1.0] (peso de la posicion). El runner exige una clase
+llamada SignalEngine; se exporta como alias de V1StopFixSignalEngine.
 
 Position sizing: el peso se calcula para que un stop ATR represente el 1%
 del capital. weight = 0.01 / (atr_mult * atr / precio_entrada), capped a 1.0.
 
 La discriminacion cripto vs accion se hace por sufijo del ticker
 (-USDT o /USDT son cripto, .US es accion).
+
+Version Pine equivalente: mi_sistema/pine/v15_stopfix.pine
 """
 
 from typing import Dict
@@ -40,7 +58,7 @@ def _atr(df: pd.DataFrame, period: int = 20) -> pd.Series:
     return tr.rolling(period).mean()
 
 
-class SignalEngine:
+class V1StopFixSignalEngine:
     DONCHIAN_HIGH = 55
     DONCHIAN_LOW = 20
     SMA_PERIOD = 200
@@ -76,7 +94,6 @@ class SignalEngine:
             atr_mult = self.ATR_MULT_CRYPTO if _is_crypto(code) else self.ATR_MULT_STOCK
 
             closes = df["close"].values.astype(float)
-            highs = df["high"].values.astype(float)
             lows = df["low"].values.astype(float)
             sma_v = sma.values.astype(float)
             dhigh_v = donch_high.values.astype(float)
@@ -107,11 +124,7 @@ class SignalEngine:
                             sig[i] = current_weight
                             in_position = True
                 else:
-                    if not np.isnan(atr_v[i]) and atr_v[i] > 0:
-                        new_stop = closes[i] - atr_mult * atr_v[i]
-                        if new_stop > stop_price:
-                            stop_price = new_stop
-
+                    # STOPFIX: 1) salidas con el stop vigente desde el cierre anterior
                     exit_now = False
                     if lows[i] <= stop_price:
                         exit_now = True
@@ -123,8 +136,17 @@ class SignalEngine:
                         current_weight = 0.0
                         in_position = False
                     else:
+                        # STOPFIX: 2) sin salida -> trailing al cierre, aplica desde manana
+                        if not np.isnan(atr_v[i]) and atr_v[i] > 0:
+                            new_stop = closes[i] - atr_mult * atr_v[i]
+                            if new_stop > stop_price:
+                                stop_price = new_stop
                         sig[i] = current_weight
 
             signals[code] = pd.Series(sig, index=df.index, name=code)
 
         return signals
+
+
+# El runner de Vibe-Trading busca una clase llamada exactamente SignalEngine.
+SignalEngine = V1StopFixSignalEngine

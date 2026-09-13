@@ -1,40 +1,35 @@
 // =============================================================================
-// *** DEPRECADO desde 2026-09-13 ***
-// Sustituido en operativa por mi_sistema/pine/v15_stopfix.pine
-// (Python: mi_sistema/signal_engine_v1_stopfix.py).
-// Motivo: sube el trailing con el close de la vela y lo compara con el low de
-// esa misma vela. Se conserva por trazabilidad. NO usar en operativa.
-// =============================================================================
-// v1.5 Donchian Breakout 55/20 + SMA(200) + ATR Stop
+// v1.5 STOPFIX Donchian Breakout 55/20 + SMA(200) + ATR Stop
 // =============================================================================
 //
-// Estrategia para paper trading en TradingView.
-// Misma logica que mi_sistema/signal_engine_v1.py.
+// Variante de v15_donchian.pine (2026-09-13). Misma logica que
+// mi_sistema/signal_engine_v1_stopfix.py. Parametros identicos a v1.5.
+//
+// UNICO cambio respecto a v15_donchian.pine: orden del trailing stop.
+//   v1.5:    sube stop con close de hoy -> compara low de hoy con ese stop.
+//            (un stop real no puede conocer el close de hoy durante el dia)
+//   stopfix: compara low de hoy con el stop del cierre ANTERIOR -> si no hay
+//            salida, sube el stop con el close de hoy para la vela siguiente.
 //
 // Tipo: Trend following por ruptura. Long-only, spot, sin apalancamiento.
 //
 // Reglas:
 //   - Entrada: cierre rompe maximo de 55 dias Y precio > SMA(200).
-//   - Salida 1: cierre rompe minimo de 20 dias.
-//   - Salida 2: salta stop ATR (precio_entrada - 2.0 * ATR(20) para cripto).
-//   - Stop trailing: solo se mueve a favor (Turtle).
+//   - Salida 1: low toca el stop vigente desde el cierre anterior.
+//   - Salida 2: cierre rompe minimo de 20 dias.
+//   - Stop inicial: precio_entrada - 2.0 * ATR(20) (cripto).
+//   - Stop trailing: solo se mueve a favor, se recalcula al cierre y aplica
+//     desde la vela siguiente.
 //   - Sizing: peso = min(1.0, 0.01 / risk_pct), implementa 1 % riesgo por trade.
 //
-// Universo previsto:
-//   BTC-USDT, ETH-USDT, SOL-USDT, XRP-USDT, ADA-USDT, BNB-USDT, AVAX-USDT.
-//
-// Aplicacion en TradingView:
-//   1. Abrir un grafico por cada activo (timeframe diario, vela cierre 00:00 UTC).
-//   2. Cargar este script como Strategy.
-//   3. Revisar al cierre UTC: flechas verdes (entry) y rojas/naranjas (exit) son senales de hoy.
-//   4. Anotar cada trade en mi_sistema/paper_log.csv.
+// Estado: EXPERIMENTO / CANDIDATO. El motor operativo sigue siendo v15_donchian.pine.
 //
 // =============================================================================
 
 //@version=6
 strategy(
-     title             = "v1.5 Donchian 55/20 + SMA(200) + ATR Stop",
-     shorttitle        = "v1.5",
+     title             = "v1.5 STOPFIX Donchian 55/20 + SMA(200) + ATR Stop",
+     shorttitle        = "v1.5sf",
      overlay           = true,
      initial_capital   = 1000,
      default_qty_type  = strategy.percent_of_equity,
@@ -77,33 +72,17 @@ atrVal    = ta.atr(atrPeriod)
 // ESTADO Y SENALES
 // ============================================================================
 
-// Senal de entrada: cierre rompe Donchian55 Y precio sobre SMA200
-canEnter    = strategy.position_size == 0 and not na(donchHi) and not na(sma200) and not na(atrVal) and atrVal > 0
-entrySignal = canEnter and close > donchHi and close > sma200
-
-// Calcular sizing al 1 % de riesgo (peso de la posicion)
 var float currentEntryPrice = na
 var float currentStopPrice  = na
 var float currentWeight     = 0.0
 
-if entrySignal
-    currentEntryPrice := close
-    currentStopPrice  := close - atrMult * atrVal
-    riskPerUnit       = (currentEntryPrice - currentStopPrice) / currentEntryPrice
-    currentWeight     := riskPerUnit > 0 ? math.min(1.0, riskPct / riskPerUnit) : 0.0
-    qtyToBuy          = currentWeight * strategy.equity / close
-    strategy.entry("Long", strategy.long, qty=qtyToBuy)
+// Stop vigente en esta vela = el que quedo al cierre de la vela anterior.
+// Se guarda antes de cualquier actualizacion para evaluar y dibujar la salida.
+stopAtOpen = currentStopPrice
 
-// Trailing stop: solo se mueve a favor
-if strategy.position_size > 0 and not na(atrVal) and atrVal > 0
-    newStop = close - atrMult * atrVal
-    if newStop > currentStopPrice
-        currentStopPrice := newStop
-
-// Salida 1: stop tocado
-exitByStop = strategy.position_size > 0 and low <= currentStopPrice
-// Salida 2: cierre rompe Donchian20 a la baja
-exitByDonchian = strategy.position_size > 0 and not na(donchLo) and close < donchLo
+// STOPFIX 1) Salidas evaluadas con el stop del cierre anterior
+exitByStop     = strategy.position_size > 0 and not na(stopAtOpen) and low <= stopAtOpen
+exitByDonchian = strategy.position_size > 0 and not exitByStop and not na(donchLo) and close < donchLo
 
 if exitByStop
     strategy.close("Long", comment="Stop ATR")
@@ -115,44 +94,58 @@ else if exitByDonchian
     currentEntryPrice := na
     currentStopPrice  := na
     currentWeight     := 0.0
+else if strategy.position_size > 0 and not na(atrVal) and atrVal > 0
+    // STOPFIX 2) Sin salida: trailing al cierre, aplica desde la vela siguiente
+    newStop = close - atrMult * atrVal
+    if newStop > currentStopPrice
+        currentStopPrice := newStop
+
+// Entrada: cierre rompe Donchian55 Y precio sobre SMA200.
+// position_size == 0 impide re-entrar en la misma vela de una salida (igual que Python).
+canEnter    = strategy.position_size == 0 and not na(donchHi) and not na(sma200) and not na(atrVal) and atrVal > 0
+entrySignal = canEnter and close > donchHi and close > sma200
+
+if entrySignal
+    currentEntryPrice := close
+    currentStopPrice  := close - atrMult * atrVal
+    riskPerUnit       = (currentEntryPrice - currentStopPrice) / currentEntryPrice
+    currentWeight     := riskPerUnit > 0 ? math.min(1.0, riskPct / riskPerUnit) : 0.0
+    qtyToBuy          = currentWeight * strategy.equity / close
+    strategy.entry("Long", strategy.long, qty=qtyToBuy)
 
 // ============================================================================
 // VISUALES
 // ============================================================================
 
-// Lineas de la estrategia
 plot(sma200,  color=color.new(color.gray, 30),    title="SMA 200",          linewidth=1)
 plot(donchHi, color=color.new(color.green, 60),   title="Donchian 55 high", linewidth=1)
 plot(donchLo, color=color.new(color.red, 60),     title="Donchian 20 low",  linewidth=1)
 
-// Stop activo (solo cuando hay posicion)
-plotStop = (strategy.position_size > 0 and showStopLine) ? currentStopPrice : na
+// Stop que rige la vela actual (el del cierre anterior)
+plotStop = (strategy.position_size > 0 and showStopLine) ? stopAtOpen : na
 plot(plotStop, color=color.red, style=plot.style_linebr, linewidth=2, title="Stop activo")
 
-// Marcadores
 plotshape(entrySignal,    style=shape.triangleup,   location=location.belowbar, color=color.new(color.green, 0),  size=size.small, title="Entrada")
 plotshape(exitByStop,     style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0),    size=size.small, title="Salida stop")
 plotshape(exitByDonchian, style=shape.triangledown, location=location.abovebar, color=color.new(color.orange, 0), size=size.small, title="Salida Donchian")
 
-// Etiquetas con precio
 if showLabels and entrySignal
     label.new(bar_index, low, "ENTRADA\n" + str.tostring(close, format.mintick), yloc=yloc.belowbar, color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
 if showLabels and exitByStop
-    label.new(bar_index, high, "STOP\n" + str.tostring(currentStopPrice, format.mintick), yloc=yloc.abovebar, color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+    label.new(bar_index, high, "STOP\n" + str.tostring(stopAtOpen, format.mintick), yloc=yloc.abovebar, color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
 if showLabels and exitByDonchian
     label.new(bar_index, high, "SALIDA D20\n" + str.tostring(close, format.mintick), yloc=yloc.abovebar, color=color.new(color.orange, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
 
-// Panel de estado en esquina superior derecha
 if showInfoPanel
     var table info = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 80), border_width=1)
     if barstate.islast
-        table.cell(info, 0, 0, "v1.5",          text_color=color.aqua,  bgcolor=color.new(color.gray, 70))
+        table.cell(info, 0, 0, "v1.5sf",        text_color=color.aqua,  bgcolor=color.new(color.gray, 70))
         table.cell(info, 1, 0, syminfo.ticker,  text_color=color.aqua,  bgcolor=color.new(color.gray, 70))
         table.cell(info, 0, 1, "Estado",        text_color=color.white)
         table.cell(info, 1, 1, strategy.position_size > 0 ? "EN POSICION" : "FUERA", text_color=strategy.position_size > 0 ? color.lime : color.silver)
         table.cell(info, 0, 2, "Entrada",       text_color=color.white)
         table.cell(info, 1, 2, strategy.position_size > 0 ? str.tostring(currentEntryPrice, format.mintick) : "-", text_color=color.white)
-        table.cell(info, 0, 3, "Stop",          text_color=color.white)
+        table.cell(info, 0, 3, "Stop manana",   text_color=color.white)
         table.cell(info, 1, 3, strategy.position_size > 0 ? str.tostring(currentStopPrice, format.mintick) : "-", text_color=color.red)
         table.cell(info, 0, 4, "ATR(20)",       text_color=color.white)
         table.cell(info, 1, 4, str.tostring(atrVal, format.mintick), text_color=color.white)
@@ -160,9 +153,9 @@ if showInfoPanel
         table.cell(info, 1, 5, strategy.position_size > 0 ? str.tostring(currentWeight * 100, "#.#") + " %" : "-", text_color=color.aqua)
 
 // ============================================================================
-// ALERTAS (Free TradingView: 1 sola activa, eliges el activo mas relevante)
+// ALERTAS
 // ============================================================================
 
 alertcondition(entrySignal,    title="Entrada Long",  message="ENTRADA {{ticker}} a {{close}} | sobre SMA200 y rompe Donchian 55")
-alertcondition(exitByStop,     title="Salida Stop",   message="STOP ATR {{ticker}} a {{close}}")
+alertcondition(exitByStop,     title="Salida Stop",   message="STOP ATR {{ticker}} tocado")
 alertcondition(exitByDonchian, title="Salida D20",    message="SALIDA Donchian 20 {{ticker}} a {{close}}")

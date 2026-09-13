@@ -28,8 +28,8 @@ data/.duckdb_tmp/
 data/parquet/
 data/backup/
 
-# Internal docs (plans, specs)
-docs/
+# Internal docs (plans, specs) — solo la raiz; mi_sistema/docs/ si se versiona
+/docs/
 data/minutes/
 data/overnight*.log
 data/*.log

@@ -1,0 +1,56 @@
+{
+  "strategy": "v1.5 cripto (Donchian 55/20 + SMA200 + ATR stop)",
+  "last_bar_date": "2026-09-12",
+  "updated_at": "2026-09-13 14:16:38",
+  "positions": {
+    "BTC": {
+      "status": "EN_POSICION",
+      "entry_date": "2026-08-21",
+      "entry_price": 78335.1875,
+      "stop_price": 75958.24492187,
+      "weight": 0.223974
+    },
+    "ETH": {
+      "status": "FUERA",
+      "entry_date": null,
+      "entry_price": null,
+      "stop_price": null,
+      "weight": 0.0
+    },
+    "SOL": {
+      "status": "FUERA",
+      "entry_date": null,
+      "entry_price": null,
+      "stop_price": null,
+      "weight": 0.0
+    },
+    "XRP": {
+      "status": "FUERA",
+      "entry_date": null,
+      "entry_price": null,
+      "stop_price": null,
+      "weight": 0.0
+    },
+    "ADA": {
+      "status": "FUERA",
+      "entry_date": null,
+      "entry_price": null,
+      "stop_price": null,
+      "weight": 0.0
+    },
+    "BNB": {
+      "status": "FUERA",
+      "entry_date": null,
+      "entry_price": null,
+      "stop_price": null,
+      "weight": 0.0
+    },
+    "AVAX": {
+      "status": "FUERA",
+      "entry_date": null,
+      "entry_price": null,
+      "stop_price": null,
+      "weight": 0.0
+    }
+  }
+}

@@ -1,19 +1,12 @@
 """
 Calculo automatico del rebalance mensual de v2 ETFs.
 
-FASE 1 FIXES (2026-09-13):
-- Fix 1: rango de descarga incluye la vela de hoy (end + 2 dias).
-- Fix 2: la fila se etiqueta con la fecha REAL de la ultima vela usada,
-  no con pd.Timestamp.today(). Antes se etiquetaba con hoy pero los precios
-  eran del cierre anterior.
-- Fix 3: avisa si la ultima vela esta a >= 2 dias de hoy (datos rancios).
-
 Descarga datos de yfinance, calcula momentum 126 dias de cada ETF,
 verifica filtro de regimen SPY > SMA(200), muestra los top 3, y AUTOMATICAMENTE
 escribe la fila correspondiente al final de mi_sistema/paper_log_v2_etfs.csv.
 
-Si ya hay una entrada para la fecha de la ultima vela, no la sobreescribe
-(avisa) salvo que se pase el flag --force.
+Si ya hay una entrada para la fecha de hoy, no la sobreescribe (avisa)
+salvo que se pase el flag --force, en cuyo caso reemplaza la fila existente.
 
 Uso:
     python mi_sistema/scripts/check_v2_etfs.py                          # rebalance manual (siempre corre)
@@ -63,13 +56,8 @@ TOP_N = 3
 
 
 def _download(tickers: list[str], days: int = 400) -> pd.DataFrame:
-    """
-    Descarga ultimos `days` dias de cierre ajustado para los tickers.
-
-    Fix 1 (2026-09-13): end se pone a hoy+2 dias para asegurar que yfinance
-    incluya la vela de hoy (el parametro `end` es exclusivo).
-    """
-    end = pd.Timestamp.today() + pd.Timedelta(days=2)
+    """Descarga ultimos `days` dias de cierre ajustado para los tickers."""
+    end = pd.Timestamp.today()
     start = end - pd.Timedelta(days=days * 1.5)  # margen para fines de semana
     df = yf.download(
         tickers,
@@ -106,30 +94,11 @@ def main() -> int:
     all_tickers = ETF_TRADEABLES + [REGIME_TICKER]
     closes = _download(all_tickers)
 
-    # Fix 1b (2026-09-13): descartar la vela del dia US en curso.
-    # Los ETFs cierran a las 22:00 CET (16:00 NY). Si se ejecuta con mercado
-    # abierto la vela de hoy es parcial y contaminaría el rebalance.
-    current_us_day = pd.Timestamp.now(tz="America/New_York").normalize().tz_localize(None)
-    closes = closes[closes.index < current_us_day]
-
     # Verificar que tenemos datos para todos
     missing = [t for t in all_tickers if t not in closes.columns]
     if missing:
         print(f"ERROR: faltan datos para: {missing}")
         return 1
-
-    # Fix 2 (2026-09-13): usar la fecha real de la ultima vela disponible
-    # para etiquetar la fila, no la fecha de ejecucion del script.
-    last_bar_date = closes.index[-1].normalize()
-    gap_days = (today - last_bar_date).days
-
-    # Fix 3 (2026-09-13): avisar si los datos son rancios (>= 2 dias de gap)
-    if gap_days >= 2:
-        print(
-            f"AVISO: la ultima vela disponible es {last_bar_date.strftime('%Y-%m-%d')}, "
-            f"{gap_days} dias por detras de hoy. Los momentums se calculan con esos datos."
-        )
-        print()
 
     # 1. Regime filter SPY > SMA(200)
     spy = closes[REGIME_TICKER].dropna()
@@ -201,9 +170,7 @@ def main() -> int:
     print("=" * 60)
     print("ESCRITURA EN paper_log_v2_etfs.csv")
     print("=" * 60)
-    # Fix 2 (2026-09-13): etiquetar con la fecha real de la ultima vela,
-    # no con today(). Antes escribia "2026-08-31" con datos del 2026-08-28.
-    fecha = last_bar_date.strftime("%Y-%m-%d")
+    fecha = pd.Timestamp.today().strftime("%Y-%m-%d")
     mom_values = []
     for t in ETF_TRADEABLES:
         if t in momentums:

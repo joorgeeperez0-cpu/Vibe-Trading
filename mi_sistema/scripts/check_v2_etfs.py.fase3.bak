@@ -106,12 +106,6 @@ def main() -> int:
     all_tickers = ETF_TRADEABLES + [REGIME_TICKER]
     closes = _download(all_tickers)
 
-    # Fix 1b (2026-09-13): descartar la vela del dia US en curso.
-    # Los ETFs cierran a las 22:00 CET (16:00 NY). Si se ejecuta con mercado
-    # abierto la vela de hoy es parcial y contaminaría el rebalance.
-    current_us_day = pd.Timestamp.now(tz="America/New_York").normalize().tz_localize(None)
-    closes = closes[closes.index < current_us_day]
-
     # Verificar que tenemos datos para todos
     missing = [t for t in all_tickers if t not in closes.columns]
     if missing:

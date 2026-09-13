@@ -82,6 +82,9 @@ python mi_sistema/scripts/check_v15_cripto.py --force
 python mi_sistema/scripts/check_v2_etfs.py
 python mi_sistema/scripts/check_v2_etfs.py --force
 
+# Modo tarea programada: solo actúa si HOY es último día hábil del mes, si no sale silencioso
+python mi_sistema/scripts/check_v2_etfs.py --only-if-last-business-day
+
 # Backtest configurable
 powershell -ExecutionPolicy Bypass -File mi_sistema/scripts/run_backtest.ps1 -ConfigName "<config>" [-SignalEngine "<engine>"]
 
@@ -90,11 +93,49 @@ docker compose --profile frontend up -d
 ```
 
 ## Automatización operativa
-- **Tarea programada de Windows** (registrada con `mi_sistema/scripts/setup_tarea_diaria.ps1`) lanza `check_v15_cripto.py` diariamente a las 09:00 hora local. Output en `mi_sistema/scripts/schedule_log.txt`. Si el PC estaba apagado, se ejecuta al encenderlo (StartWhenAvailable).
-- Verificar estado: `Get-ScheduledTask -TaskName "Vibe v1.5 daily check"`.
-- Forzar ejecución manual: `Start-ScheduledTask -TaskName "Vibe v1.5 daily check"`.
-- Desinstalar tarea: `Unregister-ScheduledTask -TaskName "Vibe v1.5 daily check" -Confirm:$false`.
-- v2 ETFs NO está automatizado (frecuencia mensual, el usuario lo lanza a mano cada último día hábil).
+
+**Proyecto en STAND-BY desde 2026-05-28.** Todo el código y los datos están intactos; las tareas programadas se pueden reactivar con un comando. Modo "opción B": mantenimiento mínimo sin capital real, la infraestructura sigue registrando paper para tener track record por si en el futuro se retoma.
+
+### Tarea diaria v1.5 cripto
+- Registrada con `mi_sistema/scripts/setup_tarea_diaria.ps1`. Lanza `check_v15_cripto.py` diariamente a las 09:00 hora local.
+- Output en `mi_sistema/scripts/schedule_log.txt`.
+- StartWhenAvailable: si el PC estaba apagado a las 09:00, se ejecuta al encenderlo.
+- Verificar: `Get-ScheduledTask -TaskName "Vibe v1.5 daily check"`.
+- Ejecutar manualmente: `Start-ScheduledTask -TaskName "Vibe v1.5 daily check"`.
+- **Pausar**: `Disable-ScheduledTask -TaskName "Vibe v1.5 daily check"`.
+- **Reactivar**: `Enable-ScheduledTask -TaskName "Vibe v1.5 daily check"`.
+- Desinstalar: `Unregister-ScheduledTask -TaskName "Vibe v1.5 daily check" -Confirm:$false`.
+
+### Tarea mensual v2 ETFs (automatizada desde 2026-07-04)
+- Registrada con `mi_sistema/scripts/setup_tarea_mensual.ps1`. Lanza `check_v2_etfs.py --only-if-last-business-day` cada día laborable a las 09:05 (5 min después de la tarea diaria v1.5).
+- El flag `--only-if-last-business-day` hace que el script salga silenciosamente los días que no son el último día hábil del mes. Así Windows Task Scheduler no necesita saber cuándo es el último día hábil, se resuelve en Python (`_is_last_business_day_of_month()`).
+- Output en `mi_sistema/scripts/schedule_log_v2.txt`.
+- Verificar: `Get-ScheduledTask -TaskName "Vibe v2 ETFs monthly check"`.
+- Ejecutar manualmente respetando el flag (no escribirá salvo que hoy sea último hábil): `Start-ScheduledTask -TaskName "Vibe v2 ETFs monthly check"`.
+- Forzar rebalance sin condición: `python mi_sistema/scripts/check_v2_etfs.py` (sin flag, sí escribe).
+- Pausar: `Disable-ScheduledTask -TaskName "Vibe v2 ETFs monthly check"`.
+- Reactivar: `Enable-ScheduledTask -TaskName "Vibe v2 ETFs monthly check"`.
+- Desinstalar: `Unregister-ScheduledTask -TaskName "Vibe v2 ETFs monthly check" -Confirm:$false`.
+
+## Bugs conocidos y fixes aplicados
+
+### 2026-09-13 · Checks diarios con histórico corrupto (CORREGIDO)
+`paper_log.csv` de v1.5 estaba corrupto. Originales en `mi_sistema/scripts/check_v15_cripto.py.bak` y `check_v2_etfs.py.bak`; log corrupto en `mi_sistema/paper_log_corrupto_2026-09-13.csv.bak`. Versiones intermedias: `check_v15_cripto.py.fase1.bak`, `.fase2.bak`.
+
+| # | Bug | Fix |
+|---|---|---|
+| 1 | `end` de yfinance es exclusivo → fila etiquetada con hoy llevaba datos de ayer | `end = hoy + 2`; fila etiquetada con la fecha **real** de la vela (v1.5 y v2) |
+| 1b | Con `end = hoy + 2` entraba la vela **en curso** (incompleta), que quedaría congelada en el log | v1.5: `_download_one` descarta velas con fecha ≥ día UTC actual. v2 ETFs: `main()` descarta velas con fecha ≥ día actual en `America/New_York` (relevante si se ejecuta con mercado US abierto, 15:30–22:00 CET) |
+| 2 | yfinance devolvía velas repetidas | Deduplicación del índice (`keep="last"`) con aviso |
+| 3 | Días sin ejecución no registraban entradas/salidas | Backfill: se escriben todas las fechas simuladas que falten en el CSV |
+| 4 | Sin persistencia: cada ejecución re-simulaba todo desde 2026-05-01 | `mi_sistema/positions_state.json` (entry_date, entry_price, stop_price, weight + `last_bar_date`). Se reanuda desde ahí; `--rebuild-state` fuerza simulación completa |
+
+- `paper_log.csv` reconstruido: 135 filas (2026-05-01 → 2026-09-12). Copia en `mi_sistema/paper_log_reconstruido_2026-09-13.csv.bak`. Validado contra FMP: divergencia máx. 0.77 %.
+- **Validación cruzada semanal**: los domingos `check_v15_cripto.py` llama a `mi_sistema/scripts/data_quality_check.py` (cierre yfinance vs FMP de BTC, ETH, SPY; umbral 0.5 %). Escribe en `mi_sistema/scripts/data_quality_log.txt`. Requiere la variable de entorno `FMP_API_KEY` (no commitear); sin ella registra SKIP. Forzar: `python mi_sistema/scripts/check_v15_cripto.py --data-check`.
+- `positions_state.json` es parte del track record: no editarlo a mano. Si se borra, la siguiente ejecución re-simula desde 2026-05-01.
+
+### Abierto · Trailing stop evaluado en la misma vela (NO corregido, pendiente de decisión)
+El stop se sube con el `close` de la vela y luego se compara con el `low` de esa misma vela. Resultado: salidas a precio de stop superior al close del día (8 de 9 salidas del paper). Afecta igual a `signal_engine_v1.py`, `pine/v15_donchian.pine` y al backtest validado. Cualquier corrección debe ir como motor nuevo versionado + backtest IS/WF + gates. Ver `mi_sistema/docs/DECISIONS_LOG.md` (2026-09-13).
 
 ## Documentación a consultar
 - `estrategia_v1.md` (raíz) — diseño original de la estrategia v1 (histórico, ya superado por STRATEGY_V1.md).
